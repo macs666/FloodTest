@@ -18,9 +18,10 @@
 //
 
 import PerfectHTTP
+import PerfectLib
 import PerfectHTTPServer
+import PerfectMustache
 
-// An example request handler.
 // This 'handler' function can be referenced directly in the configuration below.
 func handler(request: HTTPRequest, response: HTTPResponse) {
 	// Respond with a simple message.
@@ -28,6 +29,34 @@ func handler(request: HTTPRequest, response: HTTPResponse) {
 	response.appendBody(string: "<html><title>Hello, world!</title><body>Hello, world!</body></html>")
 	// Ensure that response.completed() is called when your processing is done.
 	response.completed()
+}
+
+func helpRequestHandler (request: HTTPRequest, response: HTTPResponse) {
+   
+    
+    // Ensure that response.completed() is called when your processing is done.
+    response.completed()
+}
+
+struct MustacheHelper: MustachePageHandler {
+    var values: MustacheEvaluationContext.MapType
+    
+    func extendValuesForResponse(context contxt: MustacheWebEvaluationContext, collector: MustacheEvaluationOutputCollector) {
+        contxt.extendValues(with: values)
+        do {
+            try contxt.requestCompleted(withCollector: collector)
+        } catch {
+            let response = contxt.webResponse
+            response.appendBody(string: "\(error)")
+                .completed(status: .internalServerError)
+        }
+    }
+}
+
+func homePageHandler(request: HTTPRequest, response: HTTPResponse)  {
+    var values = MustacheEvaluationContext.MapType()
+    mustacheRequest(request: request, response: response, handler: MustacheHelper(values: values), templatePath:  request.documentRoot + "\hello.mustache")
+    response.completed()
 }
 
 // Configuration data for an example server.
@@ -44,12 +73,11 @@ let confData = [
 		//	* Performs content compression on outgoing data when appropriate.
 		[
 			"name":"localhost",
-			"port":8181,
+			"port":8080 ,
 			"routes":[
 				["method":"get", "uri":"/", "handler":handler],
-				["method":"get", "uri":"/**", "handler":PerfectHTTPServer.HTTPHandler.staticFiles,
-				 "documentRoot":"./webroot",
-				 "allowResponseFilters":true]
+                ["method":"post", "uri":"/post-request", "handler": helpRequestHandler],
+				["method":"get", "uri":"/**", "handler": homePageHandler]
 			],
 			"filters":[
 				[
@@ -65,7 +93,7 @@ let confData = [
 do {
 	// Launch the servers based on the configuration data.
 	try HTTPServer.launch(configurationData: confData)
-} catch {
-	fatalError("\(error)") // fatal error launching one of the servers
+} catch PerfectError.networkError(let error,let message) {
+    fatalError("Error thrown: \(error) \(message)") // fatal error launching one of the servers
 }
 
